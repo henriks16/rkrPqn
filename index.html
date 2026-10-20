@@ -1,0 +1,1262 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>우리집 가계부</title>
+<meta name="description" content="수입·지출, 대출, 예금·적금, 카드를 기록하는 가계부">
+<meta name="theme-color" content="#2f5d62">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="가계부">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=Gowun+Batang:wght@700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a passbook — one narrow column; month header, summary strip, input slip, then dated ledger lines */
+:root{
+  --bg:#f3f5f4; --paper:#ffffff; --ink:#1d2a2b; --muted:#66757a; --line:#d9e0df;
+  --accent:#2f5d62; --accent-soft:#e3ecec;
+  --in:#2457b8; --out:#c23b3b; --warn:#b7791f;
+  --f-display:"Gowun Batang", "Noto Serif KR", serif;
+  --f-body:"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --f-num:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141b1c; --paper:#1c2526; --ink:#e4ecea; --muted:#93a3a3; --line:#2e3a3b;
+  --accent:#7fb6b0; --accent-soft:#233334; --in:#7aa7ff; --out:#ff8a80; --warn:#e6b45a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141b1c; --paper:#1c2526; --ink:#e4ecea; --muted:#93a3a3; --line:#2e3a3b;
+  --accent:#7fb6b0; --accent-soft:#233334; --in:#7aa7ff; --out:#ff8a80; --warn:#e6b45a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-top:max(24px, calc(env(safe-area-inset-top, 0px) + 12px));padding-bottom:max(48px, calc(env(safe-area-inset-bottom, 0px) + 24px));margin:0;-webkit-text-size-adjust:100%}
+html{color-scheme:light}
+[hidden]{display:none!important}
+img{max-width:100%}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--f-display);font-size:26px;margin:0;line-height:1.2}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+.monthnav{display:flex;align-items:center;gap:4px}
+.monthnav button{border:1px solid var(--line);background:var(--paper);border-radius:8px;width:36px;height:36px}
+.monthnav .m{min-width:116px;text-align:center;font-weight:600;font-size:17px}
+
+.summary{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.summary .lbl{font-size:12px;color:var(--muted);letter-spacing:.04em}
+.summary .val{font-size:20px;font-weight:500;margin-top:2px;overflow-wrap:anywhere}
+.v-in{color:var(--in)} .v-out{color:var(--out)}
+.budget{grid-column:1/-1;border-top:1px dashed var(--line);padding-top:12px;display:flex;flex-direction:column;gap:6px}
+.budget-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.budget-row button{background:none;border:none;color:var(--accent);font-size:13px;padding:2px 4px;text-decoration:underline}
+.bar{height:8px;background:var(--accent-soft);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:4px;transition:width .3s}
+.bar.over i{background:var(--out)} .bar.near i{background:var(--warn)}
+.budget-edit{display:flex;gap:8px;flex-wrap:wrap}
+.budget-edit input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+
+.slip{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.slip h2,.sec h2{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.06em;margin:0}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;align-self:flex-start}
+.seg button{border:none;background:none;padding:7px 18px;font-weight:500}
+.seg button[aria-pressed="true"].out{background:var(--out);color:#fff}
+.seg button[aria-pressed="true"].in{background:var(--in);color:#fff}
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.fields label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+.fields input,.fields select{padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:15px;width:100%;min-width:0}
+.fields .wide{grid-column:1/-1}
+.amt{position:relative}
+.amt input{padding-right:30px;text-align:right}
+.amt span{position:absolute;right:10px;bottom:10px;color:var(--muted);font-size:14px}
+.primary{background:var(--accent);color:var(--paper);border:none;border-radius:8px;padding:11px;font-weight:600}
+.err{color:var(--out);font-size:13px;min-height:1em;margin:0}
+
+.sec{display:flex;flex-direction:column;gap:10px}
+.cats{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.cat{display:grid;grid-template-columns:88px minmax(0,1fr) auto;gap:10px;align-items:center;font-size:13px}
+.cat .bar{height:10px}
+.cat .bar i{background:var(--out);opacity:.75}
+.cat .amt2{text-align:right;min-width:92px}
+
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:4px 12px;font-size:13px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.ledger{background:var(--paper);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.day{border-top:1px solid var(--line)}
+.day:first-child{border-top:none}
+.dayhead{display:flex;justify-content:space-between;padding:8px 16px;background:var(--accent-soft);font-size:12px;color:var(--muted);gap:8px}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:10px 16px;border-top:1px dashed var(--line)}
+.dayhead + .row{border-top:none}
+.row .what{min-width:0}
+.row .c{font-weight:500}
+.row .memo{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.tag{font-size:11px;border:1px solid var(--line);color:var(--muted);border-radius:4px;padding:0 4px;margin-left:4px}
+.row .a{font-weight:500;text-align:right}
+.del{border:none;background:none;color:var(--muted);font-size:12px;padding:4px 6px;border-radius:6px}
+.del.confirm{background:var(--out);color:#fff}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:14px}
+.notice{font-size:13px;color:var(--muted);background:var(--paper);border:1px dashed var(--line);border-radius:10px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.notice button{border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:4px 10px;font-size:13px}
+
+.sechead{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.loans{background:var(--paper);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.loan-total{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:12px 16px;background:var(--accent-soft);font-size:13px;color:var(--muted);flex-wrap:wrap}
+.loan-total b{font-size:18px;color:var(--ink);font-weight:500}
+.loan{padding:14px 16px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:8px}
+.loan:first-child{border-top:none}
+.loan-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.loan-name{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.loan-bal{font-size:19px;font-weight:500}
+.loan-meta{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.loan .bar i{background:var(--in)}
+.loan-acts{display:flex;gap:6px;flex-wrap:wrap}
+.loan-acts button{border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:3px 10px;font-size:12px}
+.loan-acts button.confirm{background:var(--out);color:#fff;border-color:var(--out)}
+.loan-adjust{display:flex;gap:6px;flex-wrap:wrap}
+.loan-adjust input{flex:1;min-width:0;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);text-align:right}
+.loan-adjust button{border:none;background:var(--accent);color:var(--paper);border-radius:8px;padding:7px 14px;font-weight:600}
+.paid{color:var(--in);font-weight:600}
+.save .bar i{background:var(--accent)}
+.dday{font-size:12px;font-weight:600;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:0 8px}
+.dday.done{color:var(--warn);border-color:var(--warn)}
+.card .bar i{background:var(--warn)}
+.card .bar.done i{background:var(--accent)}
+.bill{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;background:var(--bg);border-radius:8px;padding:8px 10px}
+.bill b{font-weight:500}
+.pagetabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:10px;background:var(--paper);padding:4px;gap:4px}
+.pagetabs button{border:none;background:none;border-radius:7px;padding:9px;font-weight:600;color:var(--muted)}
+.pagetabs button[aria-selected="true"]{background:var(--accent);color:var(--paper)}
+.trend{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.trend-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.yearnav{display:flex;align-items:center;gap:4px;font-weight:600}
+.yearnav button{border:1px solid var(--line);background:var(--bg);border-radius:6px;width:28px;height:28px}
+.legend{display:flex;gap:12px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.chart{overflow-x:auto}
+.chart svg{display:block;width:100%;min-width:520px;height:auto}
+.chart text{font-family:var(--f-body);font-size:11px;fill:var(--muted)}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .mbtn{cursor:pointer}
+.chart .mbtn:hover .hov{fill:var(--accent-soft)}
+.chart .cur-m{fill:var(--ink);font-weight:600}
+.tbl-wrap{overflow-x:auto}
+table.tbl{width:100%;border-collapse:collapse;font-size:13px;min-width:440px}
+.tbl th{font-weight:500;color:var(--muted);text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);font-size:12px;white-space:nowrap}
+.tbl th:first-child,.tbl td:first-child{text-align:left}
+.tbl td{text-align:right;padding:7px 8px;border-bottom:1px dashed var(--line);white-space:nowrap}
+.tbl tbody tr{cursor:pointer}
+.tbl tbody tr:hover td{background:var(--accent-soft)}
+.tbl tr.sel td{background:var(--accent-soft);font-weight:600}
+.tbl tfoot td{border-bottom:none;border-top:1px solid var(--ink);font-weight:600}
+.tbl .muted{color:var(--muted)}
+.ok{color:var(--accent);font-weight:600}
+.share{display:inline-block;width:56px;height:6px;background:var(--accent-soft);border-radius:3px;vertical-align:middle;margin-right:6px;overflow:hidden}
+.share i{display:block;height:100%;background:var(--out);opacity:.75}
+.mchip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:2px 4px 2px 12px;font-size:13px;background:var(--bg)}
+.mchip button{border:none;background:none;color:var(--muted);font-size:12px;border-radius:999px;padding:2px 8px}
+.mchip button.confirm{background:var(--out);color:#fff} .due{color:var(--warn);font-weight:600}
+.hint{font-size:12px;color:var(--muted);margin:0}
+
+@media (max-width:520px){
+  .summary{grid-template-columns:1fr;gap:8px}
+  .summary > div:not(.budget){display:flex;justify-content:space-between;align-items:baseline}
+  .summary .val{font-size:18px}
+  .cat{grid-template-columns:72px minmax(0,1fr) auto}
+  .cat .amt2{min-width:0}
+}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>우리집 가계부</h1>
+      <p class="sub" id="status">불러오는 중…</p>
+    </div>
+    <div class="monthnav">
+      <button id="prev" aria-label="이전 달">‹</button>
+      <div class="m" id="monthLabel"></div>
+      <button id="next" aria-label="다음 달">›</button>
+    </div>
+  </header>
+
+  <nav class="pagetabs" role="tablist" aria-label="페이지">
+    <button role="tab" id="tab-main" data-p="main" aria-selected="true">가계부</button>
+    <button role="tab" id="tab-status" data-p="status" aria-selected="false">자산·현황</button>
+  </nav>
+
+  <div class="notice" id="exampleNotice" hidden>
+    <span>지금 보이는 내역 중 <b>예시</b> 표시가 붙은 것은 견본입니다.</span>
+    <button id="clearExamples">예시 모두 지우기</button>
+  </div>
+
+  <section data-page="main" class="summary" aria-label="이번 달 요약">
+    <div><div class="lbl">수입</div><div class="val num v-in" id="sumIn">0원</div></div>
+    <div><div class="lbl">지출</div><div class="val num v-out" id="sumOut">0원</div></div>
+    <div><div class="lbl">남은 돈</div><div class="val num" id="sumBal">0원</div></div>
+    <div class="budget">
+      <div class="budget-row"><span id="budgetText">월 예산이 없습니다</span><button id="budgetBtn">예산 정하기</button></div>
+      <div class="bar" id="budgetBar" hidden><i id="budgetFill" style="width:0"></i></div>
+      <form class="budget-edit" id="budgetForm" hidden>
+        <input id="budgetInput" inputmode="numeric" placeholder="예: 2,000,000" aria-label="월 예산(원)">
+        <button class="primary" type="submit" style="padding:8px 14px">저장</button>
+      </form>
+    </div>
+  </section>
+
+  <section data-page="status" class="sec" aria-label="대출 잔액">
+    <div class="sechead">
+      <h2>대출 잔액</h2>
+      <button class="chip" id="loanAddBtn" type="button">+ 대출 등록</button>
+    </div>
+    <form class="slip" id="loanForm" autocomplete="off" hidden>
+      <div class="fields">
+        <label class="wide">대출 이름<input id="lName" placeholder="예: 전세자금대출, 학자금대출" maxlength="30"></label>
+        <label class="amt">지금 남은 잔액<input id="lAmt" inputmode="numeric" placeholder="0"><span>원</span></label>
+        <label>연 이율 (선택)<input id="lRate" inputmode="decimal" placeholder="예: 4.2"></label>
+      </div>
+      <p class="hint">등록한 뒤에는 지출에서 ‘대출 원금’을 적을 때마다 잔액이 그만큼 줄어듭니다.</p>
+      <p class="err" id="loanErr"></p>
+      <button class="primary" type="submit">대출 등록</button>
+    </form>
+    <div class="loans" id="loans"><div class="empty">불러오는 중…</div></div>
+  </section>
+
+  <section data-page="status" class="sec" aria-label="예금·적금">
+    <div class="sechead">
+      <h2>예금·적금</h2>
+      <button class="chip" id="saveAddBtn" type="button">+ 통장 등록</button>
+    </div>
+    <form class="slip" id="saveForm" autocomplete="off" hidden>
+      <div class="seg" role="group" aria-label="통장 종류">
+        <button type="button" class="in" id="kindJeok" aria-pressed="true">적금</button>
+        <button type="button" class="in" id="kindYe" aria-pressed="false">예금</button>
+      </div>
+      <div class="fields">
+        <label class="wide">통장 이름<input id="sName" placeholder="예: 청년도약계좌, OO은행 정기예금" maxlength="30"></label>
+        <label class="amt">지금 잔액<input id="sAmt" inputmode="numeric" placeholder="0"><span>원</span></label>
+        <label class="amt" id="sMonthlyWrap">월 납입액<input id="sMonthly" inputmode="numeric" placeholder="0"><span>원</span></label>
+        <label>연 이율 (선택)<input id="sRate" inputmode="decimal" placeholder="예: 3.5"></label>
+        <label>만기일 (선택)<input type="date" id="sMature"></label>
+        <label class="wide amt">목표 금액 (선택)<input id="sGoal" inputmode="numeric" placeholder="만기에 모을 금액"><span>원</span></label>
+      </div>
+      <p class="hint">등록한 뒤에는 지출에서 ‘저축’을 적으면 잔액이 늘고, 수입에서 ‘저축 찾기’를 적으면 줄어듭니다.</p>
+      <p class="err" id="saveErr"></p>
+      <button class="primary" type="submit">통장 등록</button>
+    </form>
+    <div class="loans" id="savings"><div class="empty">불러오는 중…</div></div>
+  </section>
+
+
+  <form class="slip" id="addForm" data-page="main" autocomplete="off">
+    <h2>내역 적기</h2>
+    <div class="seg" role="group" aria-label="구분">
+      <button type="button" class="out" id="typeOut" aria-pressed="true">지출</button>
+      <button type="button" class="in" id="typeIn" aria-pressed="false">수입</button>
+    </div>
+    <div class="fields">
+      <label>날짜<input type="date" id="fDate" required></label>
+      <label>분류<select id="fCat"></select></label>
+      <label id="whoField">누구<select id="fWho"></select></label>
+      <label id="payField">결제 수단<select id="fPay"></select></label>
+      <label class="wide" id="loanField" hidden><span id="linkLabel">어느 대출인가요</span><select id="fLoan"></select></label>
+      <label class="wide amt">금액<input id="fAmt" inputmode="numeric" placeholder="0" required><span>원</span></label>
+      <label class="wide">메모<input id="fMemo" placeholder="어디서, 무엇을 (선택)" maxlength="60"></label>
+    </div>
+    <p class="err" id="formErr"></p>
+    <button class="primary" type="submit" id="addBtn">기록하기</button>
+  </form>
+
+  <section data-page="main" class="sec" aria-label="분류별 지출">
+    <h2>분류별 지출</h2>
+    <div class="cats" id="cats"></div>
+  </section>
+
+  <section data-page="main" class="sec" aria-label="사람별">
+    <div class="sechead">
+      <h2>사람별 현황</h2>
+      <button class="chip" id="memberBtn" type="button">구성원 관리</button>
+    </div>
+    <div class="slip" id="memberBox" hidden>
+      <form class="budget-edit" id="memberForm" autocomplete="off">
+        <input id="mName" placeholder="이름 (예: 엄마, 아빠, 민수)" maxlength="12" aria-label="구성원 이름">
+        <button class="primary" type="submit" style="padding:8px 14px">추가</button>
+      </form>
+      <p class="err" id="memberErr"></p>
+      <div class="filters" id="memberList"></div>
+      <p class="hint">구성원을 지워도 그 사람으로 적은 내역은 남고, ‘공동·미지정’으로 집계됩니다.</p>
+    </div>
+    <div class="trend" id="people"></div>
+  </section>
+
+  <section data-page="main" class="sec" aria-label="카드">
+    <div class="sechead">
+      <h2>카드·현금 사용</h2>
+      <button class="chip" id="cardAddBtn" type="button">+ 카드 등록</button>
+    </div>
+    <form class="slip" id="cardForm" autocomplete="off" hidden>
+      <div class="seg" role="group" aria-label="카드 종류">
+        <button type="button" class="out" id="kindCredit" aria-pressed="true">신용카드</button>
+        <button type="button" class="out" id="kindCheck" aria-pressed="false">체크카드</button>
+      </div>
+      <div class="fields">
+        <label class="wide">카드 이름<input id="cName" placeholder="예: 생활비 신용카드, 주거래 체크카드" maxlength="30"></label>
+        <label class="credit-only">결제일<select id="cPay"></select></label>
+        <label class="credit-only">이용기간 시작일<select id="cStart"></select></label>
+        <label class="amt credit-only">한도 (선택)<input id="cLimit" inputmode="numeric" placeholder="0"><span>원</span></label>
+        <label class="amt">실적 목표 (선택)<input id="cGoal" inputmode="numeric" placeholder="예: 300,000"><span>원</span></label>
+      </div>
+      <p class="hint">이용기간은 카드 명세서에 적힌 기간의 시작일입니다. 매월 1일부터라면 1일로 두세요.</p>
+      <p class="err" id="cardErr"></p>
+      <button class="primary" type="submit">카드 등록</button>
+    </form>
+    <div class="loans" id="cards"><div class="empty">불러오는 중…</div></div>
+  </section>
+
+  <section data-page="main" class="sec" aria-label="내역">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <h2>내역</h2>
+      <div class="filters" id="filters">
+        <button class="chip" data-f="all" aria-pressed="true">전체</button>
+        <button class="chip" data-f="out" aria-pressed="false">지출</button>
+        <button class="chip" data-f="in" aria-pressed="false">수입</button>
+        <button class="chip" id="personChip" type="button" aria-pressed="true" hidden></button>
+      </div>
+    </div>
+    <div class="ledger" id="ledger"><div class="empty">내역을 불러오는 중…</div></div>
+  </section>
+
+  <section data-page="main" class="sec" aria-label="월별·연도별 현황">
+    <div class="sechead">
+      <h2>월별·연도별 현황</h2>
+      <div class="filters" id="trendTabs">
+        <button class="chip" data-v="month" aria-pressed="true">월별</button>
+        <button class="chip" data-v="year" aria-pressed="false">연도별</button>
+      </div>
+    </div>
+    <div class="trend">
+      <div class="trend-head">
+        <div class="yearnav" id="yearNav">
+          <button id="yPrev" aria-label="이전 해">‹</button>
+          <span id="yLabel"></span>
+          <button id="yNext" aria-label="다음 해">›</button>
+        </div>
+        <span id="yTitle" style="font-weight:600" hidden>연도별 합계</span>
+        <div class="legend"><span><i style="background:var(--in)"></i>수입</span><span><i style="background:var(--out)"></i>지출</span></div>
+      </div>
+      <div class="chart" id="trendChart"></div>
+      <div class="tbl-wrap" id="trendTable"></div>
+      <p class="hint" id="trendHint">달을 누르면 그 달의 요약과 내역으로, 해를 누르면 그 해의 월별 보기로 이동합니다.</p>
+    </div>
+  </section>
+
+  <section data-page="status" class="sec" aria-label="데이터 백업">
+    <h2>데이터 백업</h2>
+    <div class="slip">
+      <p class="hint" style="font-size:13px">기록은 이 기기의 브라우저 안에만 저장됩니다. 브라우저 데이터를 지우거나 기기를 바꾸면 사라지니, 가끔 백업 파일을 저장해 두세요. 다른 기기로 옮길 때도 이 파일을 불러오면 됩니다.</p>
+      <div class="loan-acts">
+        <button type="button" id="exportBtn">백업 파일 저장</button>
+        <button type="button" id="importBtn">백업 불러오기</button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </div>
+      <div class="loan-acts" id="importConfirm" hidden>
+        <span class="hint" id="importInfo" style="flex-basis:100%"></span>
+        <button type="button" id="importYes" class="confirm">지금 기록을 바꾸고 불러오기</button>
+        <button type="button" id="importNo">취소</button>
+      </div>
+      <p class="hint" id="backupMsg"></p>
+    </div>
+  </section>
+</div>
+
+<script>
+const CATS = {
+  out: ["식비","카페·간식","교통","주거·통신","생활용품","쇼핑","의료·건강","문화·여가","교육","경조사","대출 원금","대출 이자","저축","기타"],
+  in:  ["월급","용돈","부수입","이자·환급","저축 찾기","기타"]
+};
+const DOW = ["일","월","화","수","목","금","토"];
+const $ = id => document.getElementById(id);
+const won = n => Math.round(n).toLocaleString("ko-KR") + "원";
+const pad = n => String(n).padStart(2,"0");
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const parseAmt = s => { const n = Number(String(s).replace(/[^\d]/g,"")); return Number.isFinite(n) ? n : 0; };
+
+let db = null, txs = [], budget = 0, type = "out", filter = "all", loaded = false;
+let cur = (() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth()+1 }; })();
+let pendingDel = null;
+let loans = [], pendingLoanDel = null, adjustingLoan = null;
+const LOAN_CATS = ["대출 원금","대출 이자"];
+const isLoanCat = c => LOAN_CATS.includes(c);
+
+function fillCats(){
+  const sel = $("fCat"), prev = sel.value;
+  sel.innerHTML = CATS[type].map(c => `<option>${c}</option>`).join("");
+  if (CATS[type].includes(prev)) sel.value = prev;
+  updateLoanField();
+}
+let savings = [], pendingSaveDel = null, adjustingSave = null, saveKind = "적금";
+const isSaveCat = (ty, c) => (ty === "out" && c === "저축") || (ty === "in" && c === "저축 찾기");
+function linkKind(){
+  const c = $("fCat").value;
+  if (type === "out" && isLoanCat(c)) return "loan";
+  if (isSaveCat(type, c)) return "save";
+  return null;
+}
+function updateLoanField(){
+  updatePayField();
+  const k = linkKind();
+  $("loanField").hidden = !k;
+  if (!k) return;
+  const list = k === "loan" ? loans : savings;
+  $("linkLabel").textContent = k === "loan" ? "어느 대출인가요" : "어느 통장인가요";
+  const sel = $("fLoan"), prev = sel.value;
+  sel.innerHTML = list.length
+    ? list.map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join("")
+    : `<option value="">${k === "loan" ? "등록된 대출이 없습니다" : "등록된 통장이 없습니다"}</option>`;
+  if (list.some(l => l.id === prev)) sel.value = prev;
+}
+
+function saveStats(s){
+  const mk = monthKey();
+  let net = 0, mIn = 0;
+  txs.forEach(t => {
+    if (t.saveId !== s.id) return;
+    if (t.type === "out" && t.cat === "저축"){ net += t.amount; if (t.date.startsWith(mk)) mIn += t.amount; }
+    if (t.type === "in" && t.cat === "저축 찾기"){ net -= t.amount; }
+  });
+  return { net, balance: s.amount + net, mIn };
+}
+function dday(dateStr){
+  const t = new Date(todayStr() + "T00:00:00"), d = new Date(dateStr + "T00:00:00");
+  return Math.round((d - t) / 86400000);
+}
+function renderSavings(){
+  const box = $("savings");
+  if (!loaded) return;
+  if (!savings.length){
+    box.innerHTML = `<div class="empty">등록된 통장이 없습니다.<br>‘+ 통장 등록’으로 예금·적금을 추가하면, ‘저축’으로 적은 돈이 통장 잔액에 쌓입니다.</div>`;
+    return;
+  }
+  const stats = savings.map(s => [s, saveStats(s)]);
+  const total = stats.reduce((a,[,st]) => a + st.balance, 0);
+  const mTotal = stats.reduce((a,[,st]) => a + st.mIn, 0);
+  const loanTotal = loans.reduce((a,l) => a + loanStats(l).balance, 0);
+  const net = total - loanTotal;
+  box.innerHTML = `<div class="loan-total"><span>총 저축 잔액 · ${cur.m}월에 <span class="num">${won(mTotal)}</span> 모음` +
+      (loans.length ? ` · 대출 뺀 순자산 <span class="num" style="color:${net < 0 ? "var(--out)" : "var(--ink)"}">${net < 0 ? "−" : ""}${won(Math.abs(net))}</span>` : "") +
+      `</span><b class="num">${won(total)}</b></div>` +
+    stats.map(([s,st]) => {
+      const goalPct = s.goal ? Math.min(st.balance / s.goal * 100, 100) : null;
+      const dd = s.mature ? dday(s.mature) : null;
+      const adj = adjustingSave === s.id;
+      const md = s.mature ? s.mature.split("-") : null;
+      let monthLine = "";
+      if (s.kind === "적금" && s.monthly){
+        monthLine = st.mIn >= s.monthly
+          ? `<span class="ok">${cur.m}월 납입 완료</span> <span class="num">${won(st.mIn)}</span> / <span class="num">${won(s.monthly)}</span>`
+          : `<span class="due">${cur.m}월 납입 <span class="num">${won(st.mIn)}</span> / <span class="num">${won(s.monthly)}</span></span>`;
+      } else {
+        monthLine = `${cur.m}월 넣은 돈 <span class="num">${won(st.mIn)}</span>`;
+      }
+      return `<div class="loan save">
+        <div class="loan-top">
+          <span class="loan-name">${esc(s.name)}<span class="tag">${esc(s.kind || "적금")}</span>${s.rate ? `<span class="tag">연 ${esc(s.rate)}%</span>` : ""}${s.example ? '<span class="tag">예시</span>' : ""}</span>
+          <span class="loan-bal num">${won(st.balance)}</span>
+        </div>
+        ${goalPct !== null ? `<div class="bar"><i style="width:${goalPct.toFixed(1)}%"></i></div>` : ""}
+        <div class="loan-meta">
+          <span>${goalPct !== null ? `목표 <span class="num">${won(s.goal)}</span>의 ${Math.round(goalPct)}%` : "목표 금액 없음"}</span>
+          <span>${monthLine}</span>
+        </div>
+        ${md ? `<div class="loan-meta"><span>만기 ${md[0]}.${md[1]}.${md[2]}</span><span class="dday${dd <= 0 ? " done" : ""}">${dd > 0 ? "D-" + dd : dd === 0 ? "오늘 만기" : "만기 지남"}</span></div>` : ""}
+        ${adj ? `<form class="loan-adjust save-adjust" data-id="${esc(s.id)}">
+            <input id="sadj-${esc(s.id)}" inputmode="numeric" placeholder="실제 잔액" aria-label="실제 잔액(원)" value="${st.balance.toLocaleString("ko-KR")}">
+            <button type="submit">맞추기</button></form>` : ""}
+        <div class="loan-acts">
+          <button type="button" data-act="adjust" data-id="${esc(s.id)}">${adj ? "닫기" : "잔액 맞추기"}</button>
+          <button type="button" data-act="del" data-id="${esc(s.id)}" class="${pendingSaveDel === s.id ? "confirm" : ""}">${pendingSaveDel === s.id ? "삭제 확인" : "삭제"}</button>
+        </div>
+      </div>`;
+    }).join("");
+  if (adjustingSave){ const inp = $("sadj-" + adjustingSave); if (inp) fmtInput(inp); }
+}
+
+function setKind(k){
+  saveKind = k;
+  $("kindJeok").setAttribute("aria-pressed", k === "적금");
+  $("kindYe").setAttribute("aria-pressed", k === "예금");
+  $("sMonthlyWrap").hidden = k !== "적금";
+}
+$("kindJeok").onclick = () => setKind("적금");
+$("kindYe").onclick = () => setKind("예금");
+["sAmt","sMonthly","sGoal"].forEach(id => fmtInput($(id)));
+$("saveAddBtn").onclick = () => {
+  const f = $("saveForm"); f.hidden = !f.hidden;
+  $("saveAddBtn").textContent = f.hidden ? "+ 통장 등록" : "닫기";
+  if (!f.hidden) $("sName").focus();
+};
+$("saveForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("sName").value.trim();
+  const amount = parseAmt($("sAmt").value);
+  const rateRaw = $("sRate").value.trim().replace(",", ".");
+  if (!name){ $("saveErr").textContent = "통장 이름을 적어 주세요."; return; }
+  if (rateRaw && !Number.isFinite(Number(rateRaw))){ $("saveErr").textContent = "이율은 숫자로 적어 주세요. 예: 3.5"; return; }
+  $("saveErr").textContent = "";
+  const s = { name, kind: saveKind, amount, rate: rateRaw ? Number(rateRaw) : null,
+    monthly: saveKind === "적금" ? (parseAmt($("sMonthly").value) || null) : null,
+    mature: $("sMature").value || null, goal: parseAmt($("sGoal").value) || null, createdAt: Date.now() };
+  try {
+    if (db) await db.collection("savings").add(s);
+    else { savings.push({ ...s, id: "local" + s.createdAt }); render(); }
+    ["sName","sAmt","sMonthly","sRate","sMature","sGoal"].forEach(id => $(id).value = "");
+    $("saveForm").hidden = true; $("saveAddBtn").textContent = "+ 통장 등록";
+  } catch(err){ $("saveErr").textContent = "저장하지 못했습니다. 잠시 후 다시 시도해 주세요."; }
+});
+$("savings").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const id = b.dataset.id;
+  if (b.dataset.act === "adjust"){ adjustingSave = adjustingSave === id ? null : id; render(); return; }
+  if (pendingSaveDel !== id){ pendingSaveDel = id; render(); setTimeout(() => { if (pendingSaveDel === id){ pendingSaveDel = null; render(); } }, 4000); return; }
+  pendingSaveDel = null;
+  if (db){ try { await db.collection("savings").doc(id).delete(); } catch(err){ showStatus("삭제하지 못했습니다. 잠시 후 다시 시도해 주세요."); } }
+  else { savings = savings.filter(s => s.id !== id); render(); }
+});
+$("savings").addEventListener("submit", async e => {
+  const f = e.target.closest(".save-adjust"); if (!f) return;
+  e.preventDefault();
+  const id = f.dataset.id, s = savings.find(x => x.id === id); if (!s) return;
+  const amount = parseAmt($("sadj-" + id).value) - saveStats(s).net;
+  adjustingSave = null;
+  if (db){ try { await db.collection("savings").doc(id).update({ amount }); } catch(err){ showStatus("잔액을 저장하지 못했습니다."); } }
+  else { s.amount = amount; render(); }
+});
+
+/* ---------- 월별·연도별 현황 ---------- */
+let trendView = "month";
+function shortWon(n){
+  if (n === 0) return "0";
+  if (n >= 1e8) return +(n/1e8).toFixed(1) + "억";
+  if (n >= 1e4) return +(n/1e4).toFixed(n >= 1e7 ? 0 : 1) + "만";
+  return n.toLocaleString("ko-KR");
+}
+function niceMax(v){
+  if (v <= 0) return { max: 100000, step: 25000 };
+  const raw = v / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+  const step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+  return { max: Math.ceil(v / step) * step, step };
+}
+function sumsBy(keyFn){
+  const m = {};
+  txs.forEach(t => {
+    if (!t.date) return;
+    const k = keyFn(t.date); (m[k] ||= { in: 0, out: 0 });
+    m[k][t.type === "in" ? "in" : "out"] += t.amount;
+  });
+  return m;
+}
+function barChart(labels, rows, selIdx){
+  const W = 640, H = 220, L = 46, R = 8, T = 10, B = 26;
+  const { max, step } = niceMax(Math.max(0, ...rows.map(r => Math.max(r.in, r.out))));
+  const y = v => T + (H - T - B) * (1 - v / max);
+  const gw = (W - L - R) / labels.length, bw = Math.min(14, gw * 0.32);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="수입과 지출 막대 차트">`;
+  for (let v = 0; v <= max + 1e-6; v += step){
+    s += `<line class="grid" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${shortWon(v)}</text>`;
+  }
+  rows.forEach((r, i) => {
+    const cx = L + gw * i + gw / 2;
+    s += `<g class="mbtn" data-i="${i}"><rect class="hov" x="${L + gw*i + 1}" y="${T}" width="${gw-2}" height="${H-T-B}" rx="4" style="fill:transparent"/>`;
+    if (r.in) s += `<rect x="${cx - bw - 1}" y="${y(r.in)}" width="${bw}" height="${y(0)-y(r.in)}" rx="2" style="fill:var(--in)"><title>${labels[i]} 수입 ${won(r.in)}</title></rect>`;
+    if (r.out) s += `<rect x="${cx + 1}" y="${y(r.out)}" width="${bw}" height="${y(0)-y(r.out)}" rx="2" style="fill:var(--out)"><title>${labels[i]} 지출 ${won(r.out)}</title></rect>`;
+    s += `<text x="${cx}" y="${H-8}" text-anchor="middle" class="${i === selIdx ? "cur-m" : ""}">${labels[i]}</text></g>`;
+  });
+  return s + `</svg>`;
+}
+function renderTrend(){
+  const isM = trendView === "month";
+  $("yearNav").hidden = !isM; $("yTitle").hidden = isM;
+  let labels, rows, keys, selIdx;
+  if (isM){
+    $("yLabel").textContent = `${cur.y}년`;
+    const by = sumsBy(d => d.slice(0,7));
+    keys = Array.from({length:12}, (_,i) => `${cur.y}-${pad(i+1)}`);
+    labels = keys.map((_,i) => `${i+1}월`);
+    rows = keys.map(k => by[k] || { in: 0, out: 0 });
+    selIdx = cur.m - 1;
+  } else {
+    const by = sumsBy(d => d.slice(0,4));
+    const ys = Object.keys(by).map(Number);
+    const lo = Math.min(cur.y, ...ys), hi = Math.max(cur.y, ...ys);
+    keys = []; for (let yy = Math.max(lo, hi - 9); yy <= hi; yy++) keys.push(String(yy));
+    labels = keys.map(k => `${k}`);
+    rows = keys.map(k => by[k] || { in: 0, out: 0 });
+    selIdx = keys.indexOf(String(cur.y));
+  }
+  $("trendChart").innerHTML = barChart(labels, rows, selIdx);
+  const tin = rows.reduce((a,r)=>a+r.in,0), tout = rows.reduce((a,r)=>a+r.out,0);
+  const filled = rows.filter(r => r.in || r.out).length;
+  const rate = r => r.in ? Math.round((r.in - r.out) / r.in * 100) + "%" : "–";
+  const diff = v => `<span style="color:${v < 0 ? "var(--out)" : "var(--ink)"}">${v < 0 ? "−" : ""}${won(Math.abs(v))}</span>`;
+  $("trendTable").innerHTML = `<table class="tbl num"><thead><tr><th>${isM ? "월" : "연도"}</th><th>수입</th><th>지출</th><th>남은 돈</th><th>남긴 비율</th></tr></thead><tbody>` +
+    rows.map((r,i) => `<tr data-i="${i}" class="${i === selIdx ? "sel" : ""}"><td>${isM ? labels[i] : labels[i] + "년"}</td>
+      <td class="${r.in ? "v-in" : "muted"}">${won(r.in)}</td><td class="${r.out ? "v-out" : "muted"}">${won(r.out)}</td>
+      <td>${r.in || r.out ? diff(r.in - r.out) : '<span class="muted">–</span>'}</td><td class="muted">${rate(r)}</td></tr>`).join("") +
+    `</tbody><tfoot><tr><td>${isM ? "연간 합계" : "전체 합계"}</td><td class="v-in">${won(tin)}</td><td class="v-out">${won(tout)}</td><td>${diff(tin - tout)}</td><td>${rate({in:tin,out:tout})}</td></tr>` +
+    (isM && filled ? `<tr><td class="muted">기록한 달 평균</td><td class="muted">${won(tin/filled)}</td><td class="muted">${won(tout/filled)}</td><td class="muted">${won((tin-tout)/filled)}</td><td></td></tr>` : "") +
+    `</tfoot></table>`;
+  $("trendTable").dataset.keys = keys.join(",");
+  $("trendChart").dataset.keys = keys.join(",");
+}
+function goTrend(i){
+  const k = $("trendTable").dataset.keys.split(",")[i]; if (!k) return;
+  if (trendView === "month"){ cur.m = Number(k.slice(5,7)); render(); showPage("main"); return; }
+  cur.y = Number(k); trendView = "month";
+  document.querySelectorAll("#trendTabs .chip").forEach(c => c.setAttribute("aria-pressed", c.dataset.v === "month"));
+  render();
+}
+
+/* ---------- 사람별 ---------- */
+let members = [], personFilter = null, pendingMemberDel = null;
+const memberName = id => id ? (members.find(m => m.id === id)?.name || "지운 구성원") : "공동·미지정";
+function lastWho(){ try { return localStorage.getItem("gagyebu.who") || ""; } catch(e){ return ""; } }
+function updateWhoField(){
+  const sel = $("fWho"), prev = sel.dataset.touched ? sel.value : lastWho();
+  sel.innerHTML = `<option value="">공동·미지정</option>` + members.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join("");
+  if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+$("fWho").addEventListener("change", e => {
+  e.target.dataset.touched = "1";
+  try { localStorage.setItem("gagyebu.who", e.target.value); } catch(err){}
+});
+function renderPeople(){
+  const box = $("people");
+  const mk = monthKey();
+  const list = txs.filter(t => (t.date || "").startsWith(mk));
+  const keys = members.map(m => m.id);
+  if (list.some(t => !t.who || !keys.includes(t.who))) keys.push("");
+  const rows = keys.map(k => {
+    const mine = list.filter(t => k === "" ? (!t.who || !members.some(m => m.id === t.who)) : t.who === k);
+    return { k, name: k === "" ? "공동·미지정" : memberName(k),
+      in: mine.filter(t => t.type === "in").reduce((a,t)=>a+t.amount,0),
+      out: mine.filter(t => t.type === "out").reduce((a,t)=>a+t.amount,0) };
+  });
+  const tout = rows.reduce((a,r)=>a+r.out,0), tin = rows.reduce((a,r)=>a+r.in,0);
+  if (!members.length){
+    box.innerHTML = `<div class="empty" style="padding:12px">등록된 구성원이 없습니다.<br>‘구성원 관리’에서 가족 이름을 추가하면, 내역을 적을 때 누구 것인지 고를 수 있습니다.</div>`;
+    return;
+  }
+  box.innerHTML = `<div class="tbl-wrap"><table class="tbl num"><thead><tr><th>${cur.m}월</th><th>수입</th><th>지출</th><th>지출 비중</th></tr></thead><tbody>` +
+    rows.map(r => {
+      const pct = tout ? r.out / tout * 100 : 0;
+      return `<tr data-k="${esc(r.k)}" class="${personFilter === r.k ? "sel" : ""}"><td>${esc(r.name)}</td>
+        <td class="${r.in ? "v-in" : "muted"}">${won(r.in)}</td><td class="${r.out ? "v-out" : "muted"}">${won(r.out)}</td>
+        <td><span class="share"><i style="width:${pct.toFixed(1)}%"></i></span>${Math.round(pct)}%</td></tr>`;
+    }).join("") +
+    `</tbody><tfoot><tr><td>합계</td><td class="v-in">${won(tin)}</td><td class="v-out">${won(tout)}</td><td></td></tr></tfoot></table></div>
+    <p class="hint">이름을 누르면 아래 내역에서 그 사람 것만 볼 수 있습니다.</p>`;
+}
+function renderMembers(){
+  $("memberList").innerHTML = members.length ? members.map(m => `<span class="mchip">${esc(m.name)}${m.example ? ' <span class="tag">예시</span>' : ""}
+    <button type="button" data-id="${esc(m.id)}" class="${pendingMemberDel === m.id ? "confirm" : ""}" aria-label="${esc(m.name)} 지우기">${pendingMemberDel === m.id ? "지우기 확인" : "✕"}</button></span>`).join("")
+    : `<span class="hint">아직 구성원이 없습니다.</span>`;
+  const chip = $("personChip");
+  chip.hidden = personFilter === null;
+  if (personFilter !== null) chip.textContent = `${memberName(personFilter)} ✕`;
+}
+$("people").addEventListener("click", e => {
+  const tr = e.target.closest("tbody tr"); if (!tr) return;
+  personFilter = personFilter === tr.dataset.k ? null : tr.dataset.k;
+  render();
+  if (personFilter !== null) document.querySelector('[aria-label="내역"]').scrollIntoView({ behavior: "smooth", block: "start" });
+});
+$("personChip").addEventListener("click", e => { e.stopPropagation(); personFilter = null; render(); });
+$("memberBtn").onclick = () => {
+  const b = $("memberBox"); b.hidden = !b.hidden;
+  $("memberBtn").textContent = b.hidden ? "구성원 관리" : "닫기";
+  if (!b.hidden) $("mName").focus();
+};
+$("memberForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("mName").value.trim();
+  if (!name){ $("memberErr").textContent = "이름을 적어 주세요."; return; }
+  if (members.some(m => m.name === name)){ $("memberErr").textContent = "이미 있는 이름입니다."; return; }
+  $("memberErr").textContent = "";
+  const m = { name, createdAt: Date.now() };
+  try {
+    if (db) await db.collection("members").add(m);
+    else { members.push({ ...m, id: "local" + m.createdAt }); render(); }
+    $("mName").value = ""; $("mName").focus();
+  } catch(err){ $("memberErr").textContent = "저장하지 못했습니다. 잠시 후 다시 시도해 주세요."; }
+});
+$("memberList").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-id]"); if (!b) return;
+  const id = b.dataset.id;
+  if (pendingMemberDel !== id){ pendingMemberDel = id; render(); setTimeout(() => { if (pendingMemberDel === id){ pendingMemberDel = null; render(); } }, 4000); return; }
+  pendingMemberDel = null;
+  if (personFilter === id) personFilter = null;
+  if (db){ try { await db.collection("members").doc(id).delete(); } catch(err){ showStatus("지우지 못했습니다. 잠시 후 다시 시도해 주세요."); } }
+  else { members = members.filter(m => m.id !== id); render(); }
+});
+
+/* ---------- 페이지 전환 ---------- */
+let page = "main";
+function showPage(p, scroll = true){
+  page = p === "status" ? "status" : "main";
+  document.querySelectorAll("[data-page]").forEach(el => el.hidden = el.dataset.page !== page);
+  document.querySelectorAll(".pagetabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.p === page));
+  try { history.replaceState(null, "", "#" + page); } catch(e) {}
+  if (scroll) window.scrollTo(0, 0);
+}
+document.querySelector(".pagetabs").addEventListener("click", e => {
+  const b = e.target.closest("button[data-p]"); if (b) showPage(b.dataset.p);
+});
+showPage(location.hash === "#status" ? "status" : "main", false);
+$("trendTable").addEventListener("click", e => { const tr = e.target.closest("tbody tr"); if (tr) goTrend(Number(tr.dataset.i)); });
+$("trendChart").addEventListener("click", e => { const g = e.target.closest(".mbtn"); if (g) goTrend(Number(g.dataset.i)); });
+$("yPrev").onclick = () => { cur.y--; render(); };
+$("yNext").onclick = () => { cur.y++; render(); };
+$("trendTabs").addEventListener("click", e => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  trendView = b.dataset.v;
+  document.querySelectorAll("#trendTabs .chip").forEach(c => c.setAttribute("aria-pressed", c === b));
+  render();
+});
+
+/* ---------- 카드 ---------- */
+let cards = [], pendingCardDel = null, cardKind = "신용";
+const dstr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const md = d => `${d.getMonth()+1}.${d.getDate()}`;
+["cPay","cStart"].forEach(id => {
+  $(id).innerHTML = Array.from({length:28}, (_,i) => `<option value="${i+1}">${i+1}일</option>`).join("");
+});
+$("cPay").value = "14"; $("cStart").value = "1";
+["cLimit","cGoal"].forEach(id => fmtInput($(id)));
+
+function updatePayField(){
+  $("payField").hidden = type !== "out";
+  const sel = $("fPay"), prev = sel.value;
+  sel.innerHTML = `<option value="cash">현금</option><option value="transfer">계좌이체</option>` +
+    cards.map(c => `<option value="card:${esc(c.id)}">${esc(c.name)} (${esc(c.kind || "신용")})</option>`).join("");
+  if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+}
+function cardPeriod(c){
+  const s = c.cycleStart || 1, t = new Date(todayStr() + "T00:00:00");
+  let start = new Date(t.getFullYear(), t.getMonth(), s);
+  if (t.getDate() < s) start = new Date(t.getFullYear(), t.getMonth() - 1, s);
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, s - 1);
+  const b = c.payDay || 14;
+  let pay = new Date(end.getFullYear(), end.getMonth(), b);
+  if (pay <= end) pay = new Date(end.getFullYear(), end.getMonth() + 1, b);
+  return { start, end, pay };
+}
+function cardStats(c){
+  const mk = monthKey();
+  let month = 0, period = 0;
+  const p = (c.kind || "신용") === "신용" ? cardPeriod(c) : null;
+  const ps = p ? dstr(p.start) : "", pe = p ? dstr(p.end) : "";
+  txs.forEach(t => {
+    if (t.cardId !== c.id || t.type !== "out") return;
+    if (t.date.startsWith(mk)) month += t.amount;
+    if (p && t.date >= ps && t.date <= pe) period += t.amount;
+  });
+  return { month, period, p };
+}
+function renderCards(){
+  const box = $("cards");
+  if (!loaded) return;
+  const mk = monthKey();
+  const prevD = new Date(cur.y, cur.m - 2, 1);
+  const pk = `${prevD.getFullYear()}-${pad(prevD.getMonth()+1)}`;
+  const stats = cards.map(c => [c, cardStats(c)]);
+  const cardTotal = stats.reduce((a,[,s]) => a + s.month, 0);
+  const outs = txs.filter(t => t.type === "out");
+  const cashList = outs.filter(t => t.pay === "cash" && t.date.startsWith(mk));
+  const cash = cashList.reduce((a,t) => a + t.amount, 0);
+  const cashPrev = outs.filter(t => t.pay === "cash" && t.date.startsWith(pk)).reduce((a,t) => a + t.amount, 0);
+  const transfer = outs.filter(t => !t.cardId && t.pay !== "cash" && t.date.startsWith(mk)).reduce((a,t) => a + t.amount, 0);
+  const cashCats = {};
+  cashList.forEach(t => cashCats[t.cat] = (cashCats[t.cat] || 0) + t.amount);
+  const topCats = Object.entries(cashCats).sort((a,b) => b[1]-a[1]).slice(0,3).map(([c,v]) => `${esc(c)} <span class="num">${won(v)}</span>`).join(" · ");
+  const diff = cash - cashPrev;
+  const cashItem = `<div class="loan card">
+      <div class="loan-top"><span class="loan-name">현금</span><span class="loan-bal num">${won(cash)}</span></div>
+      <div class="loan-meta"><span>${cur.m}월 ${cashList.length}건 사용</span>
+        <span>지난달 <span class="num">${won(cashPrev)}</span>${cashPrev || cash ? ` · ${diff > 0 ? `<span class="due">${won(diff)} 늘었어요</span>` : diff < 0 ? `<span class="ok">${won(-diff)} 줄었어요</span>` : "같아요"}` : ""}</span></div>
+      ${topCats ? `<div class="loan-meta"><span>많이 쓴 곳: ${topCats}</span></div>` : ""}
+    </div>`;
+  box.innerHTML = `<div class="loan-total"><span>${cur.m}월 결제 수단별 · 현금 <span class="num">${won(cash)}</span> · 계좌이체 <span class="num">${won(transfer)}</span> · 카드</span><b class="num">${won(cardTotal)}</b></div>` +
+    cashItem +
+    (cards.length ? "" : `<div class="empty">등록된 카드가 없습니다.<br>‘+ 카드 등록’으로 추가하면, 지출을 적을 때 결제 수단으로 고를 수 있습니다.</div>`) +
+    stats.map(([c,s]) => {
+      const kind = c.kind || "신용";
+      const goalPct = c.goal ? Math.min(s.month / c.goal * 100, 100) : null;
+      const left = c.goal ? c.goal - s.month : 0;
+      let bill = "";
+      if (s.p){
+        const limTxt = c.limit ? ` · 한도의 <span class="${s.period / c.limit >= .8 ? "due" : ""}">${Math.round(s.period / c.limit * 100)}%</span>` : "";
+        bill = `<div class="bill"><span>이용기간 ${md(s.p.start)}~${md(s.p.end)}${limTxt}</span>
+          <span>${s.p.pay.getMonth()+1}월 ${s.p.pay.getDate()}일 결제 예정 <b class="num">${won(s.period)}</b></span></div>`;
+      }
+      return `<div class="loan card">
+        <div class="loan-top">
+          <span class="loan-name">${esc(c.name)}<span class="tag">${kind}카드</span>${c.example ? '<span class="tag">예시</span>' : ""}</span>
+          <span class="loan-bal num">${won(s.month)}</span>
+        </div>
+        ${goalPct !== null ? `<div class="bar${left <= 0 ? " done" : ""}"><i style="width:${goalPct.toFixed(1)}%"></i></div>
+          <div class="loan-meta"><span>${cur.m}월 실적 목표 <span class="num">${won(c.goal)}</span></span>
+          <span>${left <= 0 ? '<span class="ok">실적 달성</span>' : `<span class="num">${won(left)}</span> 더 쓰면 달성`}</span></div>`
+          : `<div class="loan-meta"><span>${cur.m}월 사용액</span><span>실적 목표 없음</span></div>`}
+        ${bill}
+        <div class="loan-acts">
+          <button type="button" data-act="del" data-id="${esc(c.id)}" class="${pendingCardDel === c.id ? "confirm" : ""}">${pendingCardDel === c.id ? "삭제 확인" : "삭제"}</button>
+        </div>
+      </div>`;
+    }).join("");
+}
+
+function setCardKind(k){
+  cardKind = k;
+  $("kindCredit").setAttribute("aria-pressed", k === "신용");
+  $("kindCheck").setAttribute("aria-pressed", k === "체크");
+  document.querySelectorAll(".credit-only").forEach(el => el.hidden = k !== "신용");
+}
+$("kindCredit").onclick = () => setCardKind("신용");
+$("kindCheck").onclick = () => setCardKind("체크");
+$("cardAddBtn").onclick = () => {
+  const f = $("cardForm"); f.hidden = !f.hidden;
+  $("cardAddBtn").textContent = f.hidden ? "+ 카드 등록" : "닫기";
+  if (!f.hidden) $("cName").focus();
+};
+$("cardForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("cName").value.trim();
+  if (!name){ $("cardErr").textContent = "카드 이름을 적어 주세요."; return; }
+  $("cardErr").textContent = "";
+  const credit = cardKind === "신용";
+  const c = { name, kind: cardKind,
+    payDay: credit ? Number($("cPay").value) : null, cycleStart: credit ? Number($("cStart").value) : null,
+    limit: credit ? (parseAmt($("cLimit").value) || null) : null, goal: parseAmt($("cGoal").value) || null, createdAt: Date.now() };
+  try {
+    if (db) await db.collection("cards").add(c);
+    else { cards.push({ ...c, id: "local" + c.createdAt }); render(); }
+    ["cName","cLimit","cGoal"].forEach(id => $(id).value = "");
+    $("cardForm").hidden = true; $("cardAddBtn").textContent = "+ 카드 등록";
+  } catch(err){ $("cardErr").textContent = "저장하지 못했습니다. 잠시 후 다시 시도해 주세요."; }
+});
+$("cards").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const id = b.dataset.id;
+  if (pendingCardDel !== id){ pendingCardDel = id; render(); setTimeout(() => { if (pendingCardDel === id){ pendingCardDel = null; render(); } }, 4000); return; }
+  pendingCardDel = null;
+  if (db){ try { await db.collection("cards").doc(id).delete(); } catch(err){ showStatus("삭제하지 못했습니다. 잠시 후 다시 시도해 주세요."); } }
+  else { cards = cards.filter(c => c.id !== id); render(); }
+});
+$("fCat").addEventListener("change", updateLoanField);
+
+function loanStats(l){
+  const mk = monthKey();
+  let repaid = 0, mP = 0, mI = 0;
+  txs.forEach(t => {
+    if (t.loanId !== l.id || t.type !== "out") return;
+    if (t.cat === "대출 원금"){ repaid += t.amount; if (t.date.startsWith(mk)) mP += t.amount; }
+    if (t.cat === "대출 이자" && t.date.startsWith(mk)) mI += t.amount;
+  });
+  return { repaid, balance: Math.max(l.amount - repaid, 0), mP, mI };
+}
+
+function renderLoans(){
+  const box = $("loans");
+  if (!loaded){ return; }
+  if (!loans.length){
+    box.innerHTML = `<div class="empty">등록된 대출이 없습니다.<br>‘+ 대출 등록’으로 추가하면, 지출에서 ‘대출 원금’을 적을 때마다 잔액이 줄어듭니다.</div>`;
+    return;
+  }
+  const stats = loans.map(l => [l, loanStats(l)]);
+  const total = stats.reduce((a,[,s]) => a + s.balance, 0);
+  const mTotal = stats.reduce((a,[,s]) => a + s.mP, 0);
+  box.innerHTML = `<div class="loan-total"><span>총 대출 잔액 · ${cur.m}월에 원금 <span class="num">${won(mTotal)}</span> 갚음</span><b class="num">${won(total)}</b></div>` +
+    stats.map(([l,s]) => {
+      const pct = l.amount ? Math.min(s.repaid / l.amount * 100, 100) : 0;
+      const adj = adjustingLoan === l.id;
+      return `<div class="loan">
+        <div class="loan-top">
+          <span class="loan-name">${esc(l.name)}${l.rate ? `<span class="tag">연 ${esc(l.rate)}%</span>` : ""}${l.example ? '<span class="tag">예시</span>' : ""}</span>
+          ${s.balance === 0 ? '<span class="paid">완납</span>' : `<span class="loan-bal num">${won(s.balance)}</span>`}
+        </div>
+        <div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div>
+        <div class="loan-meta">
+          <span>등록 잔액 <span class="num">${won(l.amount)}</span> 중 <span class="num">${won(s.repaid)}</span> 갚음 (${Math.round(pct)}%)</span>
+          <span>${cur.m}월 원금 <span class="num">${won(s.mP)}</span> · 이자 <span class="num">${won(s.mI)}</span></span>
+        </div>
+        ${adj ? `<form class="loan-adjust" data-id="${esc(l.id)}">
+            <input id="adj-${esc(l.id)}" inputmode="numeric" placeholder="실제 남은 잔액" aria-label="실제 남은 잔액(원)" value="${s.balance.toLocaleString("ko-KR")}">
+            <button type="submit">맞추기</button></form>` : ""}
+        <div class="loan-acts">
+          <button type="button" data-act="adjust" data-id="${esc(l.id)}">${adj ? "닫기" : "잔액 맞추기"}</button>
+          <button type="button" data-act="del" data-id="${esc(l.id)}" class="${pendingLoanDel === l.id ? "confirm" : ""}">${pendingLoanDel === l.id ? "삭제 확인" : "삭제"}</button>
+        </div>
+      </div>`;
+    }).join("");
+  if (adjustingLoan){ const inp = $("adj-" + adjustingLoan); if (inp) fmtInput(inp); }
+}
+
+$("loanAddBtn").onclick = () => {
+  const f = $("loanForm"); f.hidden = !f.hidden;
+  $("loanAddBtn").textContent = f.hidden ? "+ 대출 등록" : "닫기";
+  if (!f.hidden) $("lName").focus();
+};
+$("loanForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("lName").value.trim(), amount = parseAmt($("lAmt").value);
+  const rateRaw = $("lRate").value.trim().replace(",", ".");
+  if (!name){ $("loanErr").textContent = "대출 이름을 적어 주세요."; return; }
+  if (!amount){ $("loanErr").textContent = "남은 잔액을 숫자로 적어 주세요."; return; }
+  if (rateRaw && !Number.isFinite(Number(rateRaw))){ $("loanErr").textContent = "이율은 숫자로 적어 주세요. 예: 4.2"; return; }
+  $("loanErr").textContent = "";
+  const l = { name, amount, rate: rateRaw ? Number(rateRaw) : null, createdAt: Date.now() };
+  try {
+    if (db) await db.collection("loans").add(l);
+    else { loans.push({ ...l, id: "local" + l.createdAt }); render(); }
+    $("lName").value = ""; $("lAmt").value = ""; $("lRate").value = "";
+    $("loanForm").hidden = true; $("loanAddBtn").textContent = "+ 대출 등록";
+  } catch(err){ $("loanErr").textContent = "저장하지 못했습니다. 잠시 후 다시 시도해 주세요."; }
+});
+$("loans").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const id = b.dataset.id;
+  if (b.dataset.act === "adjust"){ adjustingLoan = adjustingLoan === id ? null : id; render(); return; }
+  if (pendingLoanDel !== id){ pendingLoanDel = id; render(); setTimeout(() => { if (pendingLoanDel === id){ pendingLoanDel = null; render(); } }, 4000); return; }
+  pendingLoanDel = null;
+  if (db){ try { await db.collection("loans").doc(id).delete(); } catch(err){ showStatus("삭제하지 못했습니다. 잠시 후 다시 시도해 주세요."); } }
+  else { loans = loans.filter(l => l.id !== id); render(); }
+});
+$("loans").addEventListener("submit", async e => {
+  const f = e.target.closest(".loan-adjust"); if (!f) return;
+  e.preventDefault();
+  const id = f.dataset.id, l = loans.find(x => x.id === id); if (!l) return;
+  const want = parseAmt($("adj-" + id).value);
+  const amount = want + loanStats(l).repaid;
+  adjustingLoan = null;
+  if (db){ try { await db.collection("loans").doc(id).update({ amount }); } catch(err){ showStatus("잔액을 저장하지 못했습니다."); } }
+  else { l.amount = amount; render(); }
+});
+function setType(t){
+  type = t;
+  $("typeOut").setAttribute("aria-pressed", t === "out");
+  $("typeIn").setAttribute("aria-pressed", t === "in");
+  fillCats();
+}
+$("typeOut").onclick = () => setType("out");
+$("typeIn").onclick = () => setType("in");
+
+function fmtInput(el){
+  el.addEventListener("input", () => {
+    const n = parseAmt(el.value);
+    el.value = n ? n.toLocaleString("ko-KR") : "";
+  });
+}
+fmtInput($("fAmt")); fmtInput($("budgetInput"));
+
+function monthKey(){ return `${cur.y}-${pad(cur.m)}`; }
+$("prev").onclick = () => { cur.m--; if (cur.m < 1){ cur.m = 12; cur.y--; } render(); };
+$("next").onclick = () => { cur.m++; if (cur.m > 12){ cur.m = 1; cur.y++; } render(); };
+
+$("filters").addEventListener("click", e => {
+  const b = e.target.closest(".chip[data-f]"); if (!b) return;
+  filter = b.dataset.f;
+  document.querySelectorAll("#filters .chip[data-f]").forEach(c => c.setAttribute("aria-pressed", c === b));
+  render();
+});
+
+function render(){
+  $("monthLabel").textContent = `${cur.y}년 ${cur.m}월`;
+  const mk = monthKey();
+  const list = txs.filter(t => (t.date || "").startsWith(mk));
+  const sIn = list.filter(t => t.type === "in").reduce((a,t)=>a+t.amount,0);
+  const sOut = list.filter(t => t.type === "out").reduce((a,t)=>a+t.amount,0);
+  $("sumIn").textContent = won(sIn);
+  $("sumOut").textContent = won(sOut);
+  const bal = sIn - sOut;
+  $("sumBal").textContent = (bal < 0 ? "−" : "") + won(Math.abs(bal));
+  $("sumBal").style.color = bal < 0 ? "var(--out)" : "var(--ink)";
+
+  // budget
+  if (budget > 0){
+    const pct = sOut / budget * 100;
+    const left = budget - sOut;
+    $("budgetText").innerHTML = `월 예산 <b class="num">${won(budget)}</b> 중 <b class="num">${Math.round(pct)}%</b> 사용 · ` +
+      (left >= 0 ? `<span class="num">${won(left)}</span> 남음` : `<span class="num v-out">${won(-left)}</span> 초과`);
+    $("budgetBtn").textContent = "예산 바꾸기";
+    $("budgetBar").hidden = false;
+    $("budgetBar").className = "bar" + (pct > 100 ? " over" : pct >= 80 ? " near" : "");
+    $("budgetFill").style.width = Math.min(pct,100) + "%";
+  } else {
+    $("budgetText").textContent = "월 예산이 없습니다";
+    $("budgetBtn").textContent = "예산 정하기";
+    $("budgetBar").hidden = true;
+  }
+
+  // categories
+  const byCat = {};
+  list.filter(t => t.type === "out").forEach(t => byCat[t.cat] = (byCat[t.cat]||0) + t.amount);
+  const rows = Object.entries(byCat).sort((a,b)=>b[1]-a[1]);
+  const max = rows.length ? rows[0][1] : 0;
+  $("cats").innerHTML = rows.length ? rows.map(([c,v]) => `
+    <div class="cat"><span>${esc(c)}</span><div class="bar"><i style="width:${(v/max*100).toFixed(1)}%"></i></div>
+    <span class="amt2 num">${won(v)} <span style="color:var(--muted)">${Math.round(v/sOut*100)}%</span></span></div>`).join("")
+    : `<div class="empty" style="padding:12px">이 달에는 지출이 없습니다.</div>`;
+
+  // ledger
+  const shown = list.filter(t => filter === "all" || t.type === filter)
+    .filter(t => personFilter === null || (personFilter === "" ? (!t.who || !members.some(m => m.id === t.who)) : t.who === personFilter))
+    .sort((a,b) => b.date.localeCompare(a.date) || (b.createdAt||0) - (a.createdAt||0));
+  if (!loaded){ /* keep loading text */ }
+  else if (!shown.length){
+    $("ledger").innerHTML = `<div class="empty">${cur.y}년 ${cur.m}월 내역이 없습니다.<br>위의 ‘내역 적기’에서 첫 내역을 기록해 보세요.</div>`;
+  } else {
+    const days = {};
+    shown.forEach(t => (days[t.date] ||= []).push(t));
+    $("ledger").innerHTML = Object.entries(days).map(([d, ts]) => {
+      const dt = new Date(d + "T00:00:00");
+      const dOut = ts.filter(t=>t.type==="out").reduce((a,t)=>a+t.amount,0);
+      const dIn = ts.filter(t=>t.type==="in").reduce((a,t)=>a+t.amount,0);
+      return `<div class="day"><div class="dayhead"><span>${dt.getMonth()+1}월 ${dt.getDate()}일 (${DOW[dt.getDay()]})</span>
+        <span class="num">${dIn ? `<span class="v-in">+${won(dIn)}</span> ` : ""}${dOut ? `<span class="v-out">−${won(dOut)}</span>` : ""}</span></div>` +
+        ts.map(t => `<div class="row">
+          <div class="what"><div class="c">${esc(t.cat)}${t.example ? '<span class="tag">예시</span>' : ""}</div>${(() => { const ln = t.loanId ? (loans.find(l => l.id === t.loanId)?.name || "삭제된 대출") : t.saveId ? (savings.find(s => s.id === t.saveId)?.name || "삭제된 통장") : ""; const cn = t.cardId ? (cards.find(c => c.id === t.cardId)?.name || "삭제된 카드") : t.pay === "cash" ? "현금" : t.pay === "transfer" ? "계좌이체" : ""; const wn = t.who ? memberName(t.who) : ""; const m = [wn, cn, ln, t.memo].filter(Boolean).join(" · "); return m ? `<div class="memo">${esc(m)}</div>` : ""; })()}</div>
+          <div class="a num ${t.type === "in" ? "v-in" : "v-out"}">${t.type === "in" ? "+" : "−"}${won(t.amount)}</div>
+          <button class="del${pendingDel === t.id ? " confirm" : ""}" data-id="${t.id}" aria-label="삭제">${pendingDel === t.id ? "삭제 확인" : "삭제"}</button>
+        </div>`).join("") + `</div>`;
+    }).join("");
+  }
+  renderLoans();
+  renderSavings();
+  renderCards();
+  renderTrend();
+  renderPeople();
+  renderMembers();
+  updateWhoField();
+  updateLoanField();
+  $("exampleNotice").hidden = !(txs.some(t => t.example) || loans.some(l => l.example) || savings.some(s => s.example) || cards.some(c => c.example) || members.some(m => m.example));
+}
+function esc(s){ return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+$("ledger").addEventListener("click", async e => {
+  const b = e.target.closest(".del"); if (!b) return;
+  const id = b.dataset.id;
+  if (pendingDel !== id){ pendingDel = id; render(); setTimeout(() => { if (pendingDel === id){ pendingDel = null; render(); } }, 4000); return; }
+  pendingDel = null;
+  if (db){ try { await db.collection("tx").doc(id).delete(); } catch(err){ showStatus("삭제하지 못했습니다. 잠시 후 다시 시도해 주세요."); } }
+  else { txs = txs.filter(t => t.id !== id); render(); }
+});
+
+$("addForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const amount = parseAmt($("fAmt").value);
+  const date = $("fDate").value;
+  if (!date){ $("formErr").textContent = "날짜를 골라 주세요."; return; }
+  if (!amount){ $("formErr").textContent = "금액을 숫자로 적어 주세요."; return; }
+  const cat = $("fCat").value;
+  const k = linkKind();
+  const linkId = k ? $("fLoan").value : null;
+  if (k && !linkId){
+    $("formErr").textContent = k === "loan" ? "먼저 ‘자산·현황’ 페이지에서 대출을 등록해 주세요." : "먼저 ‘자산·현황’ 페이지에서 통장을 등록해 주세요.";
+    return;
+  }
+  $("formErr").textContent = "";
+  const t = { date, type, cat, amount, memo: $("fMemo").value.trim(), createdAt: Date.now() };
+  if (k === "loan") t.loanId = linkId;
+  if (k === "save") t.saveId = linkId;
+  if ($("fWho").value) t.who = $("fWho").value;
+  if (type === "out"){
+    const pv = $("fPay").value;
+    if (pv.startsWith("card:")) t.cardId = pv.slice(5);
+    else t.pay = pv === "cash" ? "cash" : "transfer";
+  }
+  $("addBtn").disabled = true;
+  try {
+    if (db) await db.collection("tx").add(t);
+    else { txs.push({ ...t, id: "local" + t.createdAt }); render(); }
+    $("fAmt").value = ""; $("fMemo").value = "";
+    const [y,m] = date.split("-").map(Number);
+    if (y !== cur.y || m !== cur.m){ cur = { y, m }; render(); }
+    $("fAmt").focus();
+  } catch(err){
+    $("formErr").textContent = err?.code === "quota_exceeded" ? "저장 공간이 가득 찼습니다. 오래된 내역을 지운 뒤 다시 시도해 주세요." : "저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+  } finally { $("addBtn").disabled = false; }
+});
+
+$("budgetBtn").onclick = () => {
+  const f = $("budgetForm"); f.hidden = !f.hidden;
+  if (!f.hidden){ $("budgetInput").value = budget ? budget.toLocaleString("ko-KR") : ""; $("budgetInput").focus(); }
+};
+$("budgetForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const v = parseAmt($("budgetInput").value);
+  budget = v; $("budgetForm").hidden = true; render();
+  if (db){ try { await db.doc("settings/main").set({ budget: v }); } catch(err){ showStatus("예산을 저장하지 못했습니다."); } }
+});
+
+$("clearExamples").onclick = async () => {
+  const ex = txs.filter(t => t.example), exL = loans.filter(l => l.example), exS = savings.filter(s => s.example);
+  if (db){
+    for (const t of ex){ try { await db.collection("tx").doc(t.id).delete(); } catch(err){} }
+    for (const l of exL){ try { await db.collection("loans").doc(l.id).delete(); } catch(err){} }
+    for (const s of exS){ try { await db.collection("savings").doc(s.id).delete(); } catch(err){} }
+    for (const c of cards.filter(c => c.example)){ try { await db.collection("cards").doc(c.id).delete(); } catch(err){} }
+    for (const m of members.filter(m => m.example)){ try { await db.collection("members").doc(m.id).delete(); } catch(err){} }
+  }
+  else { txs = txs.filter(t => !t.example); loans = loans.filter(l => !l.example); savings = savings.filter(s => !s.example); cards = cards.filter(c => !c.example); members = members.filter(m => !m.example); render(); }
+  personFilter = null;
+};
+
+
+/* ---------- 기기 저장소 (localStorage) ---------- */
+const LocalDB = (() => {
+  const KEY = "gagyebu.data.v1";
+  const listeners = new Set();
+  let state = load();
+  function load(){ try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch(e){ return {}; } }
+  function emit(){ listeners.forEach(fn => { try { fn(); } catch(e){ console.error(e); } }); }
+  function save(){
+    try { localStorage.setItem(KEY, JSON.stringify(state)); }
+    catch(e){ state = load(); emit(); throw { code: "quota_exceeded", message: "저장 공간이 부족합니다." }; }
+    emit();
+  }
+  window.addEventListener("storage", e => { if (e.key === KEY){ state = load(); emit(); } });
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const snapDoc = (id, d) => ({ id, exists: !!d, data: () => (d ? { ...d } : undefined) });
+  function docRef(name, id){
+    return {
+      id,
+      async set(data){ (state[name] ||= {})[id] = JSON.parse(JSON.stringify(data)); save(); },
+      async update(data){
+        const c = state[name] ||= {};
+        if (!c[id]) throw { code: "invalid_argument", message: "없는 항목입니다." };
+        c[id] = { ...c[id], ...JSON.parse(JSON.stringify(data)) }; save();
+      },
+      async delete(){ if (state[name]) delete state[name][id]; save(); },
+      onSnapshot(next){
+        const fn = () => next(snapDoc(id, state[name] && state[name][id]));
+        listeners.add(fn); setTimeout(fn, 0); return () => listeners.delete(fn);
+      }
+    };
+  }
+  function collection(name){
+    return {
+      doc(id){ return docRef(name, id || newId()); },
+      async add(data){ const r = docRef(name, newId()); await r.set(data); return r; },
+      onSnapshot(next){
+        const fn = () => next({ docs: Object.entries(state[name] || {}).map(([id, d]) => snapDoc(id, d)) });
+        listeners.add(fn); setTimeout(fn, 0); return () => listeners.delete(fn);
+      }
+    };
+  }
+  return {
+    collection,
+    doc(path){ const [c, id] = path.split("/"); return docRef(c, id); },
+    exportJSON(){ return JSON.stringify({ app: "gagyebu", version: 1, exportedAt: new Date().toISOString(), data: state }, null, 2); },
+    parseBackup(text){
+      const o = JSON.parse(text);
+      if (!o || o.app !== "gagyebu" || typeof o.data !== "object" || o.data === null) throw new Error("not a backup");
+      return o;
+    },
+    replaceAll(data){ const prev = state; state = data; try { save(); } catch(e){ state = prev; save(); throw e; } },
+    count(){ const d = state; return { tx: Object.keys(d.tx || {}).length, loans: Object.keys(d.loans || {}).length, savings: Object.keys(d.savings || {}).length, cards: Object.keys(d.cards || {}).length }; }
+  };
+})();
+
+/* ---------- 백업 ---------- */
+let pendingImport = null;
+function lastBackupText(){
+  try { const v = localStorage.getItem("gagyebu.lastBackup"); return v ? `마지막 백업: ${v.slice(0,10)}` : "아직 백업한 적이 없습니다."; } catch(e){ return ""; }
+}
+$("backupMsg").textContent = lastBackupText();
+$("exportBtn").onclick = () => {
+  const blob = new Blob([LocalDB.exportJSON()], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `가계부-백업-${todayStr()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  try { localStorage.setItem("gagyebu.lastBackup", new Date().toISOString()); } catch(e){}
+  $("backupMsg").textContent = "백업 파일을 저장했습니다. " + lastBackupText();
+};
+$("importBtn").onclick = () => $("importFile").click();
+$("importFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  try {
+    const o = LocalDB.parseBackup(await f.text());
+    const n = k => Object.keys(o.data[k] || {}).length;
+    pendingImport = o.data;
+    $("importInfo").textContent = `${(o.exportedAt || "").slice(0,10)} 백업 · 내역 ${n("tx")}건, 대출 ${n("loans")}개, 통장 ${n("savings")}개, 카드 ${n("cards")}개. 불러오면 이 기기의 지금 기록은 모두 이 백업으로 바뀝니다.`;
+    $("importConfirm").hidden = false;
+    $("backupMsg").textContent = "";
+  } catch(err){
+    $("backupMsg").textContent = "가계부 백업 파일이 아닙니다. ‘백업 파일 저장’으로 만든 .json 파일을 골라 주세요.";
+  }
+});
+$("importNo").onclick = () => { pendingImport = null; $("importConfirm").hidden = true; };
+$("importYes").onclick = () => {
+  if (!pendingImport) return;
+  try { LocalDB.replaceAll(pendingImport); $("backupMsg").textContent = "백업을 불러왔습니다."; }
+  catch(err){ $("backupMsg").textContent = "불러오지 못했습니다. 저장 공간이 부족할 수 있습니다."; }
+  pendingImport = null; $("importConfirm").hidden = true;
+};
+
+/* ---------- 앱 설치·오프라인 ---------- */
+if ("serviceWorker" in navigator && location.protocol === "https:"){
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+if (navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(() => {}); }
+
+function showStatus(s){ $("status").textContent = s; }
+
+$("fDate").value = todayStr();
+fillCats();
+render();
+
+(async () => {
+  db = LocalDB;
+  showStatus("기록은 이 기기에 자동으로 저장됩니다");
+  db.collection("tx").onSnapshot(snap => {
+    txs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    loaded = true; render();
+  }, err => { loaded = true; showStatus("내역을 불러오지 못했습니다. 새로고침해 주세요."); render(); });
+  db.collection("loans").onSnapshot(snap => {
+    loans = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    render();
+  }, () => {});
+  db.collection("savings").onSnapshot(snap => {
+    savings = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    render();
+  }, () => {});
+  db.collection("members").onSnapshot(snap => {
+    members = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    render();
+  }, () => {});
+  db.collection("cards").onSnapshot(snap => {
+    cards = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    render();
+  }, () => {});
+  db.doc("settings/main").onSnapshot(snap => {
+    budget = snap.exists ? Number(snap.data().budget) || 0 : 0; render();
+  }, () => {});
+})();
+</script>
+</body>
+</html>
